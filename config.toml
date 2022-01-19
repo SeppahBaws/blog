@@ -1,0 +1,20 @@
+baseURL = "https://blog.seppedekeyser.be"
+languageCode = "en-us"
+title = "Seppe's Blog"
+theme = "terminal"
+
+[permalinks]
+  posts = "/:year/:month/:title"
+
+[params]
+  themeColor = "blue"
+  fullWidthTheme = false
+  centerTheme = true
+
+[params.Twitter]
+  creator = "SeppahBaws"
+  site = "SeppahBaws"
+
+[languages]
+  [languages.en.params.logo]
+    logoText = "Seppe's Blog"
