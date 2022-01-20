@@ -31,9 +31,11 @@ jobs:
           name: dist
           path: public
       
-      - name: Upload to ftp
-        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+      - name: Deploy via FTP
+        uses: airvzxf/ftp-deployment-action@latest
         with:
           server: ${{ secrets.FTP_URL }}
-          username: ${{ secrets.FTP_USERNAME }}
+          user: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          local_dir: "./public"
+          delete: false
