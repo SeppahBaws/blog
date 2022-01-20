@@ -1,10 +1,9 @@
-name: GitHub Pages
+name: Build and Deploy
 
 on:
   push:
     branches:
       - main  # Set a branch to deploy
-  pull_request:
 
 jobs:
   build:
@@ -31,3 +30,10 @@ jobs:
         with:
           name: dist
           path: public
+      
+      - name: Upload to ftp
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+        with:
+          server: ${{ secrets.FTP_URL }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
