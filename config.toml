@@ -1,6 +1,6 @@
 baseURL = "https://blog.seppedekeyser.be"
 languageCode = "en-us"
-title = "Seppe's Blog"
+title = "Rendering Pixels"
 theme = "terminal"
 
 [permalinks]
