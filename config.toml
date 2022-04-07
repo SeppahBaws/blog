@@ -1,4 +1,4 @@
-baseURL = "https://blog.seppedekeyser.be"
+baseURL = "https://renderingpixels.com"
 languageCode = "en-us"
 title = "Rendering Pixels"
 theme = "terminal"
@@ -17,4 +17,4 @@ theme = "terminal"
 
 [languages]
   [languages.en.params.logo]
-    logoText = "Seppe's Blog"
+    logoText = "Rendering Pixels"
