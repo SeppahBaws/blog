@@ -1,41 +1,41 @@
-name: Build and Deploy
+# name: Build and Deploy
 
-on:
-  push:
-    branches:
-      - main  # Set a branch to deploy
+# on:
+#   push:
+#     branches:
+#       - main  # Set a branch to deploy
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: true  # Fetch Hugo themes (true OR recursive)
-          fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     concurrency:
+#       group: ${{ github.workflow }}-${{ github.ref }}
+#     steps:
+#       - uses: actions/checkout@v2
+#         with:
+#           submodules: true  # Fetch Hugo themes (true OR recursive)
+#           fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
 
-      - name: Setup Hugo
-        uses: peaceiris/actions-hugo@v2
-        with:
-          hugo-version: '0.91.2'
-          # extended: true
+#       - name: Setup Hugo
+#         uses: peaceiris/actions-hugo@v2
+#         with:
+#           hugo-version: '0.91.2'
+#           # extended: true
 
-      - name: Build
-        run: hugo --minify
+#       - name: Build
+#         run: hugo --minify
 
-      - name: Archive artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: dist
-          path: public
+#       - name: Archive artifacts
+#         uses: actions/upload-artifact@v2
+#         with:
+#           name: dist
+#           path: public
       
-      - name: Deploy via FTP
-        uses: airvzxf/ftp-deployment-action@latest
-        with:
-          server: ${{ secrets.FTP_URL }}
-          user: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local_dir: "./public"
-          delete: false
+#       - name: Deploy via FTP
+#         uses: airvzxf/ftp-deployment-action@latest
+#         with:
+#           server: ${{ secrets.FTP_URL }}
+#           user: ${{ secrets.FTP_USERNAME }}
+#           password: ${{ secrets.FTP_PASSWORD }}
+#           local_dir: "./public"
+#           delete: false
