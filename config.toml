@@ -2,6 +2,7 @@ baseURL = "https://renderingpixels.com"
 languageCode = "en-us"
 title = "Rendering Pixels"
 theme = "terminal"
+copyright = "© 2022 - Seppe Dekeyser"
 
 [permalinks]
   posts = "/:year/:month/:title"
@@ -10,11 +11,23 @@ theme = "terminal"
   themeColor = "blue"
   fullWidthTheme = false
   centerTheme = true
+  showMenuItems = 2
+  showLastUpdated = true
+  oneHeadingSize = false
 
 [params.Twitter]
   creator = "SeppahBaws"
   site = "SeppahBaws"
 
-[languages]
-  [languages.en.params.logo]
-    logoText = "Rendering Pixels"
+[params.logo]
+  logoText = "Rendering Pixels"
+
+[menu]
+  [[menu.main]]
+    identifier = "01-posts"
+    name = "See All Posts"
+    url = "/posts"
+  [[menu.main]]
+    identifier = "02-portfolio"
+    name = "My Portfolio"
+    url = "https://seppedekeyser.be"
