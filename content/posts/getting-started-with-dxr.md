@@ -715,7 +715,7 @@ And that's it! If everything went well, you should now have your scene being ray
 In case you got stuck on something, I recommend going through the references linked below. They were the major ones I used when setting up DXR for the first time.
 I also point you to [my own repository](https://github.com/SeppahBaws/DirectX-Raytracing) where you can find all the source code I wrote during my internship. Everything in there should be working fine(tm).
 
-If you haven't yet, I also recommend giving [my previous post]({{< ref "/posts/ramblings-on-games-rendering-and-real-time-raytracing.md" >}} a read, where I ramble about raytracing in games and stuff. If this post was a bit too much over your head, I think you'll enjoy that one. :)
+If you haven't yet, I also recommend giving [my previous post]({{< ref "/posts/ramblings-on-games-rendering-and-real-time-raytracing.md" >}}) a read, where I ramble about raytracing in games and stuff. If this post was a bit too much over your head, I think you'll enjoy that one. :)
 
 
 # References
