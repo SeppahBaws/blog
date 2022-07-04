@@ -1,4 +1,556 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>rendering on Rendering Pixels</title><link>https://renderingpixels.com/tags/rendering/</link><description>Recent content in rendering on Rendering Pixels</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>© 2022 - Seppe Dekeyser</copyright><lastBuildDate>Tue, 18 Jan 2022 21:34:09 +0100</lastBuildDate><atom:link href="https://renderingpixels.com/tags/rendering/index.xml" rel="self" type="application/rss+xml"/><item><title>Ramblings on Games Rendering and Real-Time Raytracing</title><link>https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/</link><pubDate>Tue, 18 Jan 2022 21:34:09 +0100</pubDate><guid>https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/</guid><description>a.k.a. what I&amp;rsquo;ve learned about how games render their worlds and how raytracing works.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>rendering on Rendering Pixels</title><link>https://renderingpixels.com/tags/rendering/</link><description>Recent content in rendering on Rendering Pixels</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>© 2022 - Seppe Dekeyser</copyright><lastBuildDate>Mon, 04 Jul 2022 22:08:12 +0200</lastBuildDate><atom:link href="https://renderingpixels.com/tags/rendering/index.xml" rel="self" type="application/rss+xml"/><item><title>Getting Started With DirectX Raytracing</title><link>https://renderingpixels.com/2022/07/getting-started-with-directx-raytracing/</link><pubDate>Mon, 04 Jul 2022 22:08:12 +0200</pubDate><guid>https://renderingpixels.com/2022/07/getting-started-with-directx-raytracing/</guid><description>In my previous post I talked about what raytracing is and what it does. This one is more of a tutorial/guide on getting started with DirectX Raytracing.
+This post is based off the documentation I wrote during my internship last year at DAE Research, slightly edited in places where some things were missing or needed some clarification. My aim for this is to be the one-stop place for anyone who&amp;rsquo;s starting with DirectX Raytracing.</description><content>&lt;p>In &lt;a href="https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/" title="my previous post">my previous post&lt;/a> I talked about what raytracing is and what it does. This one is more of a tutorial/guide on getting started with DirectX Raytracing.&lt;/p>
+&lt;p>This post is based off the documentation I wrote during my internship last year at &lt;a href="https://digitalartsandentertainment.be/page/133/Research">DAE Research&lt;/a>, slightly edited in places where some things were missing or needed some clarification. My aim for this is to be the one-stop place for anyone who&amp;rsquo;s starting with DirectX Raytracing. It is basically what I would&amp;rsquo;ve personally wanted to have when I was getting started.&lt;/p>
+&lt;p>It might not be &lt;em>all&lt;/em> the source code that you&amp;rsquo;ll need, since I was working with &lt;a href="https://github.com/microsoft/DirectX-Graphics-Samples/tree/master/MiniEngine">Microsoft&amp;rsquo;s MiniEngine&lt;/a> during my internship, but it should still provide all the necessary details.
+All the source code of my internship project is available on &lt;a href="https://github.com/SeppahBaws/DirectX-Raytracing/tree/main/MiniEngine/RayBinning">GitHub&lt;/a>, if you&amp;rsquo;re curious. The main code is in the &lt;code>RaytracingTest.cpp&lt;/code> file.&lt;/p>
+&lt;h1 id="setup">Setup&lt;/h1>
+&lt;h2 id="dxr-enabled-device">DXR-enabled device&lt;/h2>
+&lt;p>The only additional step we have to do for MiniEngine DXR is to retrieve an &lt;code>ID3D12Device5*&lt;/code> from the device. This is the earliest device version that supports ray-tracing. There currently are newer versions available, but this version should be all we need for this post.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>ComPtr&lt;span style="color:#f92672">&amp;lt;&lt;/span>ID3D12Device5&lt;span style="color:#f92672">&amp;gt;&lt;/span> pRTDevice;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>HRESULT hr &lt;span style="color:#f92672">=&lt;/span> g_Device&lt;span style="color:#f92672">-&amp;gt;&lt;/span>QueryInterface(IID_PPV_ARGS(&lt;span style="color:#f92672">&amp;amp;&lt;/span>pRTDevice));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// If not successful, we can assume DXR is not supported.
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Because this project is rather limited in scope, the only functionality we are going to need from the &lt;code>ID3D12Device5&lt;/code> are the &lt;a href="https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device5-createstateobject">&lt;code>CreateStateObject()&lt;/code>&lt;/a> and the &lt;a href="https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device5-getraytracingaccelerationstructureprebuildinfo">&lt;code>GetRaytracingAccelerationStructurePrebuildInfo()&lt;/code>&lt;/a> functions. The full &lt;a href="https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device5">Microsoft DirectX 12 documentation&lt;/a> shows what other functionality the &lt;code>ID3D12Device5&lt;/code> interface provides.&lt;/p>
+&lt;h1 id="root-signatures">Root Signatures&lt;/h1>
+&lt;p>A root signature defines what &amp;ldquo;root parameters&amp;rdquo; a shader has, what their type is, and in which register they are bound. In DirectX Raytracing we have two types of root signatures: global root signatures and local root signatures.&lt;/p>
+&lt;p>Creating a root signature with the &lt;code>RootSignature&lt;/code> class in the MiniEngine is really simple:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// SamplerDesc wraps a D3D12_SAMPLER_DESC and provides default values
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>SamplerDesc sampler;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>RootSignature exampleSignature{};
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The Reset function takes in two parameters:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// UINT NumRootParams : the amount of root parameters we want to pass.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// UINT NumStaticSamplers : the amout of static samplers we want to pass.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>exampleSignature.Reset(&lt;span style="color:#ae81ff">2&lt;/span>, &lt;span style="color:#ae81ff">1&lt;/span>);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>exampleSignature.InitStaticSampler(&lt;span style="color:#ae81ff">0&lt;/span>, sampler); &lt;span style="color:#75715e">// Pass in the sampler on register 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We initialize the first entry as a buffer SRV, bound to register 0.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>exampleSignature[&lt;span style="color:#ae81ff">0&lt;/span>].InitAsBufferSRV(&lt;span style="color:#ae81ff">0&lt;/span>);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The 2nd entry gets initialized as a descriptor range.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// First we pass in the descriptor range type,
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// then the register at which the descriptor range starts,
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// and lastly the amount of descriptors that are in this range.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>exampleSignature[&lt;span style="color:#ae81ff">1&lt;/span>].InitAsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, &lt;span style="color:#ae81ff">1&lt;/span>, &lt;span style="color:#ae81ff">3&lt;/span>);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// When we added all the entries, we can create the root signature.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The string we pass in is the debug name that will show up in graphics debuggers
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>exampleSignature.Finalize(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;My Example Root Signature&amp;#34;&lt;/span>);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="global-root-signature">Global Root Signature&lt;/h2>
+&lt;p>A global root signature defines root parameters that are accessible across all DXR shaders in that pipeline. Every shader in the pipeline will have access to the root parameters defined in the global root signature.&lt;/p>
+&lt;p>Good candidates for parameters in the global root signature are: the raytracing output buffer, acceleration structure, mesh info&amp;hellip;&lt;br>
+In general: parameters that are needed across all shader stages.&lt;/p>
+&lt;h2 id="local-root-signature">Local Root Signature&lt;/h2>
+&lt;p>Unlike a global root signature, a local root signature is only visible to one shader, specified upon creating the pipeline. Arguments are provided by the shader table.&lt;/p>
+&lt;p>Some logical use cases: bind an environment texture to the miss shader, bind the mesh texture to the hit shader&amp;hellip;&lt;/p>
+&lt;h2 id="local-vs-global-root-signatures">Local vs global root signatures&lt;/h2>
+&lt;p>In general, you want to use global root signatures for data that has to be available to all shaders, and local root signatures for data that is specific to one shader step. One important thing to note when using local and global root signatures together, is that the registers of the local root signature cannot overlap with those defined in the global root signature.&lt;/p>
+&lt;p>Local root signatures also have a larger limit on the amount of shader records they can hold.&lt;/p>
+&lt;h1 id="dxr-shaders">DXR Shaders&lt;/h1>
+&lt;p>Although DirectX Raytracing shaders are very similar to normal HLSL shaders, they do have some extra features to facilitate raytracing.&lt;/p>
+&lt;p>The most important thing to note is that raytracing is only supported in Shader Model 6.3 and above. In MiniEngine, shaders are built with Visual Studio, you just have to add them to the solution. In the file options, make sure to set the item type to &amp;ldquo;HLSL Compiler&amp;rdquo;
+&lt;img src="https://renderingpixels.com/images/getting-started-with-dxr/vs-shader-type.png" alt="">&lt;/p>
+&lt;p>To compile a raytracing shader in Visual Studio, make sure to add it to the solution, remove the Entrypoint Name, set the Shader Type to &amp;ldquo;Library&amp;rdquo; and set the Shader Model to &amp;ldquo;Shader Model 6.3&amp;rdquo;. Higher Shader Model versions should also work, but that may depend on the compiler and Windows SDK version you use.
+&lt;img src="https://renderingpixels.com/images/getting-started-with-dxr/vs-shader-compile-options.png" alt="">&lt;/p>
+&lt;p>A raytracing shader also needs to have an &amp;ldquo;attribute&amp;rdquo; on the shader function. An attribute looks as follows: &lt;code>[shader(&amp;quot;shadertype&amp;quot;)]&lt;/code>, where you replace &lt;code>shadertype&lt;/code> with the type of the shader (the exact attributes will be shown in each section below).&lt;/p>
+&lt;h2 id="ray-generation-shader">Ray generation shader&lt;/h2>
+&lt;p>To declare a ray generation shader, assign the following attribute to your shader function: &lt;code>[shader(&amp;quot;raygeneration&amp;quot;)]&lt;/code>&lt;/p>
+&lt;p>A ray generation shader in its essence will look something like the following:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>[shader(&lt;span style="color:#e6db74">&amp;#34;raygeneration&amp;#34;&lt;/span>)]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">void&lt;/span> RayGen()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Do some stuff...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> RayDesc ray &lt;span style="color:#f92672">=&lt;/span> { &lt;span style="color:#75715e">/* ... */&lt;/span> };
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> MyPayload payload &lt;span style="color:#f92672">=&lt;/span> { &lt;span style="color:#75715e">/* ... */&lt;/span> };
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> TraceRay( &lt;span style="color:#75715e">/* ... */&lt;/span>, ray, payload);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The primary function of the ray generation shader is to call &lt;code>TraceRay&lt;/code> to generate the rays that will be shot out, based on a &lt;code>RayDesc&lt;/code> structure that is filled in and passed to the &lt;code>TraceRay&lt;/code> function. The &lt;code>RayDesc&lt;/code> structure is filled in as follows:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>RayDesc ray &lt;span style="color:#f92672">=&lt;/span> {};
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ray.Origin &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#75715e">/* ... */&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ray.TMin &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#75715e">/* ... */&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ray.Direction &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#75715e">/* ... */&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ray.TMax &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#75715e">/* ... */&lt;/span>;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>With this &lt;code>RayDesc&lt;/code> structure now filled in, we can make a call to the &lt;code>TraceRay&lt;/code> function:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>TraceRay(
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Here we pass in the acceleration structure
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> AccelerationStructure,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Flags to specify the behavior when a ray hits a surface. A good default
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// is RAY_FLAG_CULL_BACK_FACING_TRIANGLES
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> RayFlags,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// This mask can be used to mask out some geometries.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// We pass in ~0 or 0xFF, indicating that no geometries will be masked out.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> InstanceOcclusionMask,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Sometimes an object can have multiple hit groups attached to it.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// (e.g. one for diffuse shading, and one for shadow rays)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// so we can use this parameter to index to the correct hit group
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// Since we only have one hit group in this project, we can default it to 0
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> RayContributionToHitMask,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// According to the documentation:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// This specifies the stride to multiply by GeometryContributionToHitGroupIndex,
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// which is just the 0 based index the geometry was supplied by the app into the
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// bottom-level acceleration structure.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// If you&amp;#39;re not doing anything fancy with this, you can just set it to 1.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> MultiplierForGeometryContributionToHitGroupIndex,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// In case we are using multiple miss shaders, we can use this parameter to
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// index to the correct shader that we want to use. If you only have one
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// miss shader, you can just pass in 0.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> MissShaderIndex,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Here we pass the RayDesc structure that we filled in the previous step
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> RayDesc,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// The payload that we associate with this ray. This is used to communicate
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// information between the raygen and hit/miss shaders.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> Payload
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Important to note: the &lt;code>TraceRay&lt;/code> function can be called from the Ray Generation shader, Closest Hit shader and the Miss shader. This is especially useful if you want to e.g. render reflections, as you can just call another &lt;code>TraceRay&lt;/code> in the Closest hit shader.&lt;/p>
+&lt;h3 id="ray-payload">Ray Payload&lt;/h3>
+&lt;p>The ray payload is a user-defined structure that gets passed along with the &lt;code>TraceRay&lt;/code> function, and is then passed to the any hit, closest hit, and miss shaders as an inout parameter. Important to note is that the shaders using the payload must use the same structure as the one that was provided to the &lt;code>TraceRay&lt;/code> function.&lt;/p>
+&lt;h3 id="traceray-vs-tracerayinline">TraceRay vs TraceRayInline&lt;/h3>
+&lt;p>Besides the &lt;code>TraceRay&lt;/code> function, there is also the &lt;code>TraceRayInline&lt;/code> function. The inline version offers the same functionality as the normal &lt;code>TraceRay&lt;/code> function, except that it doesn&amp;rsquo;t make use of separate shaders for hit and miss etc. The shader that calls &lt;code>TraceRayInline&lt;/code> has to control what the raytracer does. A more in-depth explanation can be found here: &lt;a href="https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#inline-raytracing">DirectX Raytracing (DXR) Functional Spec&lt;/a>.&lt;/p>
+&lt;h2 id="miss-shader">Miss shader&lt;/h2>
+&lt;p>This shader is invoked when the ray does not hit anything at all. To identify a shader as a miss shader, use the &lt;code>[shader(&amp;quot;miss&amp;quot;)]&lt;/code> attribute. A common use for this shader is to sample from an environment map.&lt;/p>
+&lt;p>An example:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>[shader(&lt;span style="color:#e6db74">&amp;#34;miss&amp;#34;&lt;/span>)]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">void&lt;/span> Miss(inout MyPayload payload)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Possibly sample from environment map...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// Calls to TraceRay and CallShader can also be done here if desired
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="hit-shaders">Hit shaders&lt;/h2>
+&lt;p>The hit shaders are executed when a ray intersects with a triangle in the acceleration structure. There are two different types of hit shaders:&lt;/p>
+&lt;h3 id="closest-hit">Closest Hit&lt;/h3>
+&lt;p>The Closest Hit shader can only get invoked once per ray, at the closest intersection with an object. Most of the shading work should be done in this shader. The attribute used for this shader is &lt;code>[shader(&amp;quot;closesthit&amp;quot;)]&lt;/code>.&lt;/p>
+&lt;p>A closest hit shader may look like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>[shader(&lt;span style="color:#e6db74">&amp;#34;closesthit&amp;#34;&lt;/span>)]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">void&lt;/span> ClosestHit(inout MyPayload payload, in MyAttributes attr)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Your logic here...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// Possibly even additional calls to TraceRay with a reflected ray...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="any-hit">Any Hit&lt;/h3>
+&lt;p>The Any Hit shader is called every time a ray intersects with a triangle. They are very useful to calculate transparency in objects, as they can tell the API to ignore the current hit and continue searching for other hits. Any Hit shaders are defined by the attribute &lt;code>[shader(&amp;quot;anyhit&amp;quot;)]&lt;/code>.&lt;/p>
+&lt;p>To prevent heavy performance impacts, it is good practice to keep the Any Hit shaders as trivial as possible, because they can get called many times per &lt;code>TraceRay()&lt;/code> call.&lt;/p>
+&lt;p>An example of an any hit shader:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>[shader(&lt;span style="color:#e6db74">&amp;#34;anyhit&amp;#34;&lt;/span>)]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">void&lt;/span> AnyHit(inout MyPayload payload, in MyAttributes attr)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Typically some alpha-testing logic here...
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Call to `AcceptHitAndEndSearch(...)` if we&amp;#39;re ok with this current intersection.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// Call `IgnoreHit(...)` if we want to discard this intersection and search for more.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="intersection-shader">Intersection shader&lt;/h2>
+&lt;p>An intersection shader is used in case you want to implement custom intersection primitives. If you have procedural geometry in your acceleration structure, you can write a custom intersection shader to test each ray for collision against this procedural object. (e.g. you can pass a sphere as a point and a radius, and then write a custom intersection shader to define these collisions, instead of making a triangle mesh for the sphere)&lt;/p>
+&lt;p>An intersection shader uses the &lt;code>[shader(&amp;quot;intersection&amp;quot;)]&lt;/code> attribute:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>[shader(&lt;span style="color:#e6db74">&amp;#34;intersection&amp;#34;&lt;/span>)]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">void&lt;/span> Intersection()
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Intersection checks
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// Call `ReportHit(...)`
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you do not provide an intersection shader, DXR will use a default ray-triangle intersection shader. For most use cases, you shouldn&amp;rsquo;t have to write an intersection shader yourself.&lt;/p>
+&lt;h2 id="callable-shader">Callable shader&lt;/h2>
+&lt;p>Callable shaders are shaders that can be invoked from another shader, by using the &lt;code>CallShader(...)&lt;/code> function. A callable shader can be used to group common behavior together, and reduce duplicated code across the shaders. For my simple example, I didn&amp;rsquo;t find a use case to use a callable shader.&lt;/p>
+&lt;p>In order to declare a shader as a callable shader, you have to use the &lt;code>[shader(&amp;quot;callable&amp;quot;)]&lt;/code> attribute on the shader function.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-c" data-lang="c">&lt;span style="display:flex;">&lt;span>[shader(&lt;span style="color:#e6db74">&amp;#34;callable&amp;#34;&lt;/span>)]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">void&lt;/span> Callable(inout MyParams params)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Do some shader magic.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#75715e">// Perhaps another call to CallShader
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="acceleration-structure">Acceleration Structure&lt;/h1>
+&lt;p>The acceleration structure is key to real-time raytracing. It is a Bounding Volume Hierarchy (BVH for short) which can be efficiently traversed to calculate ray-object intersections. In DXR this BVH exists of two levels: a Bottom-Level Acceleration Structure (BLAS) and a Top-Level Acceleration Structure (TLAS). The BLASes hold mesh data, along with a transform matrix. Each TLAS then holds an instance of a BLAS, along with a transform matrix.
+&lt;img src="https://renderingpixels.com/images/getting-started-with-dxr/nvidia-accel-overview.png" alt="">
+Image credit: NVIDIA&lt;/p>
+&lt;h2 id="scratch-buffer">Scratch Buffer&lt;/h2>
+&lt;p>To create the acceleration structure in DXR, we need to allocate a scratch buffer that will be used to store temporary calculations while building the acceleration structure on the GPU. Before we can do that, we first need to query the minimum size that we&amp;rsquo;re gonna need:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Get the TLAS prebuild info, so that we know how much scratch buffer size we need.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO tlasPrebuildInfo;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC tlasDesc &lt;span style="color:#f92672">=&lt;/span> {};
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Here we specify how many BLASes we need, and other parameters.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS&lt;span style="color:#f92672">&amp;amp;&lt;/span> tlasInputs &lt;span style="color:#f92672">=&lt;/span> tlasDesc.Inputs;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>tlasInputs.Type &lt;span style="color:#f92672">=&lt;/span> D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>tlasInputs.NumDescs &lt;span style="color:#f92672">=&lt;/span> numBottomLevels;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>tlasInputs.Flags &lt;span style="color:#f92672">=&lt;/span> D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>tlasInputs.pGeometryDescs &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#66d9ef">nullptr&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>tlasInputs.DescsLayout &lt;span style="color:#f92672">=&lt;/span> D3D12_ELEMENTS_LAYOUT_ARRAY;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Query how much we need.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>rtDevice&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetRaytracingAccelerationStructurePrebuildInfo(&lt;span style="color:#f92672">&amp;amp;&lt;/span>tlasInputs, &lt;span style="color:#f92672">&amp;amp;&lt;/span>tlasPrebuildInfo);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We&amp;#39;ll update this when we create the BLASes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>UINT64 scratchBufferSizeNeeded &lt;span style="color:#f92672">=&lt;/span> tlasPrebuildInfo.ScratchDataSizeInBytes;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We&amp;rsquo;ll come back to creating the actual scratch buffer later, when we know how big our scratch buffer needs to be.&lt;/p>
+&lt;h2 id="bottom-level-acceleration-structure">Bottom-Level Acceleration Structure&lt;/h2>
+&lt;p>To create the BLASes, we need to first describe the geometry that it will take in.
+In my case, I decided to have one BLAS for each model in my scene, and merge all the meshes in a model into the same BLAS, but your approach could be different.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>std&lt;span style="color:#f92672">::&lt;/span>vector&lt;span style="color:#f92672">&amp;lt;&lt;/span>D3D12_RAYTRACING_GEOMETRY_DESC&lt;span style="color:#f92672">&amp;gt;&lt;/span> geometryDescs(numMeshes);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Set up the descriptor for the mesh
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">for&lt;/span> (UINT i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>; i &lt;span style="color:#f92672">&amp;lt;&lt;/span> numMeshes; i&lt;span style="color:#f92672">++&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> Model&lt;span style="color:#f92672">::&lt;/span>Mesh&lt;span style="color:#f92672">&amp;amp;&lt;/span> mesh &lt;span style="color:#f92672">=&lt;/span> pModel&lt;span style="color:#f92672">-&amp;gt;&lt;/span>m_pMesh[i];
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_RAYTRACING_GEOMETRY_DESC&lt;span style="color:#f92672">&amp;amp;&lt;/span> desc &lt;span style="color:#f92672">=&lt;/span> geometryDescs[i];
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> desc.Type &lt;span style="color:#f92672">=&lt;/span> D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> desc.Flags &lt;span style="color:#f92672">=&lt;/span> D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Specify some properties of the mesh data
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC&lt;span style="color:#f92672">&amp;amp;&lt;/span> trianglesDesc &lt;span style="color:#f92672">=&lt;/span> desc.Triangles;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.VertexFormat &lt;span style="color:#f92672">=&lt;/span> DXGI_FORMAT_R32G32B32_FLOAT;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.VertexCount &lt;span style="color:#f92672">=&lt;/span> mesh.vertexCount;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.VertexBuffer.StartAddress &lt;span style="color:#f92672">=&lt;/span> pModel&lt;span style="color:#f92672">-&amp;gt;&lt;/span>m_VertexBuffer.GetGpuVirtualAddress() &lt;span style="color:#f92672">+&lt;/span> (mesh.vertexDataByteOffset &lt;span style="color:#f92672">+&lt;/span> mesh.attrib[Model&lt;span style="color:#f92672">::&lt;/span>attrib_position].offset);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.VertexBuffer.StrideInBytes &lt;span style="color:#f92672">=&lt;/span> mesh.vertexStride;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.IndexBuffer &lt;span style="color:#f92672">=&lt;/span> pModel&lt;span style="color:#f92672">-&amp;gt;&lt;/span>m_IndexBuffer.GetGpuVirtualAddress() &lt;span style="color:#f92672">+&lt;/span> mesh.indexDataByteOffset;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.IndexCount &lt;span style="color:#f92672">=&lt;/span> mesh.indexCount;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.IndexFormat &lt;span style="color:#f92672">=&lt;/span> DXGI_FORMAT_R16_UINT;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> trianglesDesc.Transform3x4 &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now that we have the geometry descriptors, we can create the BLAS create structs:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Prepare the BLAS create structs
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>std&lt;span style="color:#f92672">::&lt;/span>vector&lt;span style="color:#f92672">&amp;lt;&lt;/span>UINT64&lt;span style="color:#f92672">&amp;gt;&lt;/span> blasSize(numBottomLevels);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>std&lt;span style="color:#f92672">::&lt;/span>vector&lt;span style="color:#f92672">&amp;lt;&lt;/span>D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC&lt;span style="color:#f92672">&amp;gt;&lt;/span> blasDescs(numBottomLevels);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">for&lt;/span> (UINT i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>; i &lt;span style="color:#f92672">&amp;lt;&lt;/span> numBottomLevels; i&lt;span style="color:#f92672">++&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC&lt;span style="color:#f92672">&amp;amp;&lt;/span> blasDesc &lt;span style="color:#f92672">=&lt;/span> blasDescs[i];
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS&lt;span style="color:#f92672">&amp;amp;&lt;/span> blasInputs &lt;span style="color:#f92672">=&lt;/span> blasDesc.Inputs;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasInputs.Type &lt;span style="color:#f92672">=&lt;/span> D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasInputs.NumDescs &lt;span style="color:#f92672">=&lt;/span> numMeshes;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasInputs.pGeometryDescs &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#f92672">&amp;amp;&lt;/span>geometryDescs[i];
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasInputs.Flags &lt;span style="color:#f92672">=&lt;/span> buildFlags;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasInputs.DescsLayout &lt;span style="color:#f92672">=&lt;/span> D3D12_ELEMENTS_LAYOUT_ARRAY;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO blasPrebuildInfo;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> rtDevice&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetRaytracingAccelerationStructurePrebuildInfo(&lt;span style="color:#f92672">&amp;amp;&lt;/span>blasInputs, &lt;span style="color:#f92672">&amp;amp;&lt;/span>blasPrebuildInfo);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasSize[i] &lt;span style="color:#f92672">=&lt;/span> blasPrebuildInfo.ResultDataMaxSizeInBytes;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Here we&amp;#39;ll make sure to increase the scratch buffer size, if we need it.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> scratchBufferSizeNeeded &lt;span style="color:#f92672">=&lt;/span> std&lt;span style="color:#f92672">::&lt;/span>max(blasPrebuildInfo.ScratchDataSizeInBytes, scratchBufferSizeNeeded);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Now that we know the size, we can finally create the scratch buffer.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>scratchBuffer.Create(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;Acceleration Structure Scratch Buffer&amp;#34;&lt;/span>, &lt;span style="color:#66d9ef">static_cast&lt;/span>&lt;span style="color:#f92672">&amp;lt;&lt;/span>UINT&lt;span style="color:#f92672">&amp;gt;&lt;/span>(scratchBufferSizeNeeded), &lt;span style="color:#ae81ff">1&lt;/span>);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>With our scratch buffer created and our BLAS descriptors set up, we can create the BLASes:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>std&lt;span style="color:#f92672">::&lt;/span>vector&lt;span style="color:#f92672">&amp;lt;&lt;/span>D3D12_RAYTRACING_INSTANCE_DESC&lt;span style="color:#f92672">&amp;gt;&lt;/span> instanceDescs(numBottomLevels);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>blases.resize(numBottomLevels);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">for&lt;/span> (UINT i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>; i &lt;span style="color:#f92672">&amp;lt;&lt;/span> blasDescs.size(); i&lt;span style="color:#f92672">++&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#66d9ef">auto&lt;/span>&lt;span style="color:#f92672">&amp;amp;&lt;/span> blas &lt;span style="color:#f92672">=&lt;/span> blases[i];
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Create the BLAS
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#66d9ef">auto&lt;/span> bottomLevelDesc &lt;span style="color:#f92672">=&lt;/span> CD3DX12_RESOURCE_DESC&lt;span style="color:#f92672">::&lt;/span>Buffer(blasSize[i], D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> g_Device&lt;span style="color:#f92672">-&amp;gt;&lt;/span>CreateCommittedResource(
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">&amp;amp;&lt;/span>defaultHeapDesc,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_HEAP_FLAG_NONE,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">&amp;amp;&lt;/span>bottomLevelDesc,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#66d9ef">nullptr&lt;/span>,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> IID_PPV_ARGS(&lt;span style="color:#f92672">&amp;amp;&lt;/span>blas));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasDescs[i].DestAccelerationStructureData &lt;span style="color:#f92672">=&lt;/span> blas&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetGPUVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> blasDescs[i].ScratchAccelerationStructureData &lt;span style="color:#f92672">=&lt;/span> scratchBuffer.GetGpuVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> D3D12_RAYTRACING_INSTANCE_DESC&lt;span style="color:#f92672">&amp;amp;&lt;/span> instanceDesc &lt;span style="color:#f92672">=&lt;/span> instanceDescs[i];
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> UINT descriptorIndex &lt;span style="color:#f92672">=&lt;/span> descriptorHeap&lt;span style="color:#f92672">-&amp;gt;&lt;/span>AllocateBufferUav(&lt;span style="color:#f92672">*&lt;/span>blas.Get());
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Identity matrix
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> ZeroMemory(instanceDesc.Transform, &lt;span style="color:#66d9ef">sizeof&lt;/span>(instanceDesc.Transform));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.Transform[&lt;span style="color:#ae81ff">0&lt;/span>][&lt;span style="color:#ae81ff">0&lt;/span>] &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1.0f&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.Transform[&lt;span style="color:#ae81ff">1&lt;/span>][&lt;span style="color:#ae81ff">1&lt;/span>] &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1.0f&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.Transform[&lt;span style="color:#ae81ff">2&lt;/span>][&lt;span style="color:#ae81ff">2&lt;/span>] &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1.0f&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.AccelerationStructure &lt;span style="color:#f92672">=&lt;/span> blases[i]&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetGPUVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.Flags &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.InstanceID &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.InstanceMask &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> instanceDesc.InstanceContributionToHitGroupIndex &lt;span style="color:#f92672">=&lt;/span> i;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We create a buffer to hold all of our BLAS instances.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>instanceDataBuffer.Create(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;Instance Data Buffer&amp;#34;&lt;/span>, numBottomLevels, &lt;span style="color:#66d9ef">sizeof&lt;/span>(D3D12_RAYTRACING_INSTANCE_DESC), instanceDescs.data());
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="top-level-acceleration-structure">Top-Level Acceleration Structure&lt;/h2>
+&lt;p>The top-level acceleration structure could be seen as an acceleration structure of acceleration structures. It holds instances of BLASes, each with their own transform matrix, so that it can correctly placed it in the world.&lt;/p>
+&lt;p>Now that we have our BLASes created, we can create the TLAS.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Specify where the instance data buffer is located.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>tlasInputs.InstanceDescs &lt;span style="color:#f92672">=&lt;/span> instanceDataBuffer.GetGpuVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>tlasInputs.DescsLayout &lt;span style="color:#f92672">=&lt;/span> D3D12_ELEMENTS_LAYOUT_ARRAY;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// With all the necessary buffers set up and structures filled in,
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// we can finally tell the GPU to build our acceleration structure
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Create the BLASes
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">for&lt;/span> (UINT i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>; i &lt;span style="color:#f92672">&amp;lt;&lt;/span> blasDescs.size(); i&lt;span style="color:#f92672">++&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> pRaytracingCommandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>BuildRaytracingAccelerationStructure(&lt;span style="color:#f92672">&amp;amp;&lt;/span>blasDescs[i], &lt;span style="color:#ae81ff">0&lt;/span>, &lt;span style="color:#66d9ef">nullptr&lt;/span>);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Create the TLAS
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>pRaytracingCommandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>BuildRaytracingAccelerationStructure(&lt;span style="color:#f92672">&amp;amp;&lt;/span>tlasDesc, &lt;span style="color:#ae81ff">0&lt;/span>, &lt;span style="color:#66d9ef">nullptr&lt;/span>);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The full source code of this example can be found &lt;a href="https://github.com/SeppahBaws/DirectX-Raytracing/blob/main/MiniEngine/AdaptiveSampling/RaytracingHelpers/AccelerationStructureBuilder.cpp">here&lt;/a>. I mostly put everything into this post, but it might be more useful to see the full source code.&lt;/p>
+&lt;h2 id="acceleration-structure-refitting">Acceleration Structure Refitting&lt;/h2>
+&lt;p>If we want to animate our scenes now, we would need to completely rebuild the acceleration structure from scratch. As you can guess, this would cause a huge performance impact. Luckily we can avoid this by &amp;ldquo;refitting&amp;rdquo; the TLAS, which is much faster than a complete rebuild.&lt;/p>
+&lt;p>Since the TLAS simply stores BLASes along with a transformation matrix, we can simply update the transformation matrices for the BLASes that we want to animate, and refit the acceleration structure.&lt;/p>
+&lt;p>Since refitting was out of scope for my internship and this post, I kindly refer you to the &lt;a href="https://developer.nvidia.com/rtx/raytracing/dxr/dx12-raytracing-tutorial/extra/dxr_tutorial_extra_refit">NVIDIA DXR tutorial on refitting&lt;/a>.&lt;/p>
+&lt;h1 id="descriptor-heap">Descriptor Heap&lt;/h1>
+&lt;p>A descriptor heap is a collection of resource views. Its purpose is to group the majority of memory allocations for the resource views together. We can then create resource views for the shaders from this heap.&lt;/p>
+&lt;p>It is important to note that not all resource views can be created from the same descriptor heap: SRVs, UAVs and CBVs can be created from the same heap, but RTVs and Sampler views each need their own separate heap.&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Create our descriptor heap:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc &lt;span style="color:#f92672">=&lt;/span> {};
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>descriptorHeapDesc.NumDescriptors &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">10&lt;/span>; &lt;span style="color:#75715e">// How many you need
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>descriptorHeapDesc.Type &lt;span style="color:#f92672">=&lt;/span> D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>descriptorHeapDesc.Flags &lt;span style="color:#f92672">=&lt;/span> D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>g_Device&lt;span style="color:#f92672">-&amp;gt;&lt;/span>CreateDescriptorHeap(&lt;span style="color:#f92672">&amp;amp;&lt;/span>descriptorHeapDesc, IID_PPV_ARGS(&lt;span style="color:#f92672">&amp;amp;&lt;/span>m_DescriptorHeap));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Get the handle so we can write to it on the CPU side
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>D3D12_CPU_DESCRIPTOR_HANDLE descHandle &lt;span style="color:#f92672">=&lt;/span> m_DescriptorHeap&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetCPUDescriptorHandleForHeapStart();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Now we can describe what our descriptor view should look like:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Add TLAS as SRV
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>descHandle.ptr &lt;span style="color:#f92672">+=&lt;/span> g_Device&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// In this case we&amp;#39;re creating our acceleration structure resource view:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>srvDesc.Format &lt;span style="color:#f92672">=&lt;/span> DXGI_FORMAT_UNKNOWN;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>srvDesc.ViewDimension &lt;span style="color:#f92672">=&lt;/span> D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>srvDesc.Shader4ComponentMapping &lt;span style="color:#f92672">=&lt;/span> D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>srvDesc.RaytracingAccelerationStructure.Location &lt;span style="color:#f92672">=&lt;/span> scene.m_InstanceDataBuffer&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetGPUVirtualAddress(); &lt;span style="color:#75715e">// GPU address to the acceleration instance data buffer.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>g_Device&lt;span style="color:#f92672">-&amp;gt;&lt;/span>CreateShaderResourceView(&lt;span style="color:#66d9ef">nullptr&lt;/span>, &lt;span style="color:#f92672">&amp;amp;&lt;/span>srvDesc, descHandle);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="shader-binding-tables">Shader (Binding) Tables&lt;/h1>
+&lt;p>In a rasterized pipeline, we always know what part of the scene we&amp;rsquo;re rendering at any one point. However, we don&amp;rsquo;t have that luxury in raytracing, since two rays might get bounced around, hitting two totally different objects (e.g. one just a normal mesh, the other might hit a transparent object, etc&amp;hellip;).&lt;/p>
+&lt;p>This is why we need a Shader Table: it holds all the shaders we might possibly need during raytracing. While raytracing, the API then indexes into the shader tables and uses the specified shader, depending on the current context (Did the ray hit anything? If yes, &lt;em>what&lt;/em> did we hit? Was it a normal triangle? Was it something which requires a custom intersection shader? Which hit shader should I even run? etc&amp;hellip;)&lt;/p>
+&lt;p>In the simple case of a hello-dxr, we only need 3 byte address buffers to store our shader tables:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>ByteAddressBuffer m_RayGenShaderTable;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ByteAddressBuffer m_MissShaderTable;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ByteAddressBuffer m_HitShaderTable;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can now start creating our shader tables. We&amp;rsquo;ll need some extra helpers to get started first though:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">const&lt;/span> UINT shaderTableSize &lt;span style="color:#f92672">=&lt;/span> D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ID3D12StateObjectProperties&lt;span style="color:#f92672">*&lt;/span> stateObjectProperties &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#66d9ef">nullptr&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>ASSERT_SUCCEEDED(pPSO&lt;span style="color:#f92672">-&amp;gt;&lt;/span>QueryInterface(IID_PPV_ARGS(&lt;span style="color:#f92672">&amp;amp;&lt;/span>stateObjectProperties)));
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>We can now create the ray generation shader table - the miss shader table will be the exact same, except for a different shader identifier and a different ByteAddressBuffer:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">const&lt;/span> UINT alignment &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">16&lt;/span>; &lt;span style="color:#75715e">// We need to align it to 16 bytes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// A vector of bytes to hold our aligned table.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We add alignment - 1 to the initial size, so that we have room to pad our bytes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>std&lt;span style="color:#f92672">::&lt;/span>vector&lt;span style="color:#f92672">&amp;lt;&lt;/span>BYTE&lt;span style="color:#f92672">&amp;gt;&lt;/span> alignedShaderTableData(shaderTableSize &lt;span style="color:#f92672">+&lt;/span> alignment &lt;span style="color:#f92672">-&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Now we can get an aligned pointer into the bytes, where we will then write our shader table
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>BYTE&lt;span style="color:#f92672">*&lt;/span> pAlignedShaderTableData &lt;span style="color:#f92672">=&lt;/span> alignedShaderTableData.data() &lt;span style="color:#f92672">+&lt;/span> ((UINT64)alignedShaderTableData.data() &lt;span style="color:#f92672">%&lt;/span> alignment);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// For the ray generation table and miss table, we&amp;#39;ll only need the shader identifier
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The `rayGenExportName` parameter here is the export name of the shader. This has to be the same as the one that you passed into the PSO
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">void&lt;/span>&lt;span style="color:#f92672">*&lt;/span> pRayGenShaderData &lt;span style="color:#f92672">=&lt;/span> stateObjectProperties&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetShaderIdentifier(rayGenExportName);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Copy our shader data into the aligned portion of the vector.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>memcpy(pAlignedShaderTableData, pRayGenShaderData, shaderTableSize);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We can now create the ByteAddressBuffer with MiniEngine&amp;#39;s helpers:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>m_RayGenShaderTable.Create(
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;Ray Gen Shader Table&amp;#34;&lt;/span>, &lt;span style="color:#75715e">// The name of the buffer
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>, &lt;span style="color:#75715e">// The amount of elements
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> shaderTableSize, &lt;span style="color:#75715e">// The size of each element
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> alignedShaderTableData.data() &lt;span style="color:#75715e">// The initial data
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Creating the hit shader table is a bit more complicated, and will vary depending on what data you need access to in the hit shader.
+A simple pass where you output the mesh texture color might look something like this:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The size of the shader identifier
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">const&lt;/span> UINT shaderIdentifierSize &lt;span style="color:#f92672">=&lt;/span> D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The offset in the blob to the descriptor handle
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">const&lt;/span> UINT offsetToDescriptorHandle &lt;span style="color:#f92672">=&lt;/span> ALIGN(&lt;span style="color:#66d9ef">sizeof&lt;/span>(D3D12_GPU_DESCRIPTOR_HANDLE), shaderIdentifierSize);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// THe offset in the blob to the material constants
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">const&lt;/span> UINT offsetToMaterialConstants &lt;span style="color:#f92672">=&lt;/span> ALIGN(&lt;span style="color:#66d9ef">sizeof&lt;/span>(UINT32), offsetToDescriptorHandle &lt;span style="color:#f92672">+&lt;/span> &lt;span style="color:#66d9ef">sizeof&lt;/span>(D3D12_GPU_DESCRIPTOR_HANDLE));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The size of one shader record
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">const&lt;/span> UINT shaderRecordSizeInBytes &lt;span style="color:#f92672">=&lt;/span> ALIGN(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, offsetToMaterialConstants &lt;span style="color:#f92672">+&lt;/span> &lt;span style="color:#66d9ef">sizeof&lt;/span>(MeshRootConstant));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// This is a temporary buffer where we will write the shader record table to.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We will have as many shader records as we have meshes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// In my case, a &amp;#34;scene&amp;#34; only consisted of a single model with one or more meshes.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>std&lt;span style="color:#f92672">::&lt;/span>vector&lt;span style="color:#f92672">&amp;lt;&lt;/span>byte&lt;span style="color:#f92672">&amp;gt;&lt;/span> pHitShaderTable(shaderRecordSizeInBytes &lt;span style="color:#f92672">*&lt;/span> model.m_Header.meshCount);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Get the shader identifier:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>&lt;span style="color:#66d9ef">void&lt;/span>&lt;span style="color:#f92672">*&lt;/span> pHitGroupIdentifierData &lt;span style="color:#f92672">=&lt;/span> stateObjectProperties&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetShaderIdentifier(DEFAULT_HIT_GROUP_NAME);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">for&lt;/span> (UINT i &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>; i &lt;span style="color:#f92672">&amp;lt;&lt;/span> model.m_Header.meshCount; i&lt;span style="color:#f92672">++&lt;/span>)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>{
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// First entry in the record: the hit group for which this entry is
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> byte&lt;span style="color:#f92672">*&lt;/span> pShaderRecord &lt;span style="color:#f92672">=&lt;/span> i &lt;span style="color:#f92672">*&lt;/span> shaderRecordSizeInBytes &lt;span style="color:#f92672">+&lt;/span> pHitShaderTable.data();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> memcpy(pShaderRecord, pHitGroupIdentifierData, shaderIdentifierSize);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Second entry: shader descriptors (textures etc)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> UINT materialIndex &lt;span style="color:#f92672">=&lt;/span> model.m_pMesh[i].materialIndex;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> memcpy(pShaderRecord &lt;span style="color:#f92672">+&lt;/span> offsetToDescriptorHandle,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">&amp;amp;&lt;/span>scene.m_ModelDescriptors[materialIndex].ptr,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#66d9ef">sizeof&lt;/span>(scene.m_ModelDescriptors[materialIndex].ptr)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> );
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e">// Third entry: mesh id (used to query mesh data like UVs in the shader)
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span> MeshRootConstant meshConst;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> meshConst.meshId &lt;span style="color:#f92672">=&lt;/span> i;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> memcpy(pShaderRecord &lt;span style="color:#f92672">+&lt;/span> offsetToMaterialConstants,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">&amp;amp;&lt;/span>meshConst,
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#66d9ef">sizeof&lt;/span>(meshConst)
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> );
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>}
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Now we can create the ByteAddressBuffer with `pHitGroupIdentifierData`,
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// exactly the same way we did for the ray gen table and miss table
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="raytracing-pipeline">Raytracing pipeline&lt;/h1>
+&lt;p>The raytracing pipeline groups all the objects together that are required to kick off the raytracing. These are: the shaders, hit groups, shader associations and the global root signature.
+The DirectX 12 helpers library (available at: &lt;a href="https://github.com/microsoft/DirectX-Headers/blob/main/include/directx/d3dx12.h">microsoft/DirectX-Headers&lt;/a>) is a very useful tool to quickly set this up, because it abstracts away a lot of boilerplate code.&lt;/p>
+&lt;p>To create a pipeline, we start off by creating the pipeline descriptor:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>CD3DX12_STATE_OBJECT_DESC raytracingPipeline{ D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE };
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Then, we add our shaders to the pipeline: (repeat this for each shader)&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> shaderLib &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_DXIL_LIBRARY_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>D3D12_SHADER_BYTECODE shaderDxil &lt;span style="color:#f92672">=&lt;/span> CD3DX12_SHADER_BYTECODE((&lt;span style="color:#66d9ef">void&lt;/span>&lt;span style="color:#f92672">*&lt;/span>)g_pShader, ARRAYSIZE(g_pShader));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>shaderLib&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetDXILLibrary(&lt;span style="color:#f92672">&amp;amp;&lt;/span>shaderDxil);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>shaderLib&lt;span style="color:#f92672">-&amp;gt;&lt;/span>DefineExport(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;ShaderMainFunction&amp;#34;&lt;/span>);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;code>g_pShader&lt;/code> is the bytecode array which is output by the shader compiler in Visual Studio, and &lt;code>L&amp;quot;ShaderMainFunction&amp;quot;&lt;/code> is the name of the main function in your shader. This is the one with the shader identifier attribute.&lt;/p>
+&lt;p>After that, we add the hit group(s): (again, repeat for each group)&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> hitGroup &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_HIT_GROUP_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>hitGroup&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetClosestHitShaderImport(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;...&amp;#34;&lt;/span>); &lt;span style="color:#75715e">// Closest hit shader main function name.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>hitGroup&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetHitGroupExport(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;...&amp;#34;&lt;/span>); &lt;span style="color:#75715e">// Name to identify this hit group as.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>hitGroup&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES); &lt;span style="color:#75715e">// Can also be D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE.
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Next, we add the shader config:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> shaderConfig &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>UINT payloadSize &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span> &lt;span style="color:#f92672">*&lt;/span> &lt;span style="color:#66d9ef">sizeof&lt;/span>(&lt;span style="color:#66d9ef">float&lt;/span>); &lt;span style="color:#75715e">// float rayHitT
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>UINT attributeSize &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">2&lt;/span> &lt;span style="color:#f92672">*&lt;/span> &lt;span style="color:#66d9ef">sizeof&lt;/span>(&lt;span style="color:#66d9ef">float&lt;/span>); &lt;span style="color:#75715e">// float2 barycentrics
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>shaderConfig&lt;span style="color:#f92672">-&amp;gt;&lt;/span>Config(payloadSize, attributeSize);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>In this example, the ray payload only has 1 float for the distance, and we&amp;rsquo;re using the built-in attributes (&lt;code>BuiltInTriangleIntersectionAttributes&lt;/code>) which only has a &lt;code>float2 barycentrics&lt;/code> as data. (&lt;a href="https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#intersection-attributes-structure">spec&lt;/a>)&lt;/p>
+&lt;p>Next, we add the local root signatures: (repeat for each shader)&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> shaderLocalRootSig &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>shaderLocalRootSig&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetRootSignature(m_ShaderLocalRootSig.GetSignature());
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;code>m_ShaderLocalRootSig&lt;/code> is of type &lt;code>RootSignature&lt;/code> which is provided by the MiniEngine, and filled in later in the code&lt;/p>
+&lt;p>Then, we move on to adding the shader associations: (repeat for each shader)&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> shaderAssoc &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>shaderAssoc&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetSubobjectToAssociate(&lt;span style="color:#f92672">*&lt;/span>shaderLocalRootSig); &lt;span style="color:#75715e">// Root signature subobject from previous step.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>shaderAssoc&lt;span style="color:#f92672">-&amp;gt;&lt;/span>AddExport(&lt;span style="color:#e6db74">L&lt;/span>&lt;span style="color:#e6db74">&amp;#34;...&amp;#34;&lt;/span>); &lt;span style="color:#75715e">// Shader export name.
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Next, we bind the global root signature:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> globalRootSig &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>globalRootSig&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetRootSignature(m_RTGlobalRootSig.GetSignature());
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Similar as the local root signatures, the global root signature is of type &lt;code>RootSignature&lt;/code>, which is provided by the MiniEngine, and initialized earlier in the code.&lt;/p>
+&lt;p>Finally, we bind the pipeline configuration:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">auto&lt;/span> pipelineConfig &lt;span style="color:#f92672">=&lt;/span> raytracingPipeline.CreateSubobject&lt;span style="color:#f92672">&amp;lt;&lt;/span>CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT&lt;span style="color:#f92672">&amp;gt;&lt;/span>();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>UINT maxRecursionDepth &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>pipelineConfig&lt;span style="color:#f92672">-&amp;gt;&lt;/span>Config(maxRecursionDepth);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The &lt;code>maxRecursionDepth&lt;/code> defines how much recursion we can have (some effects like reflections need to trace secondary rays from a ray hit point). In my example I only used primary rays, so a maxRecursionDepth of 1 worked just fine.&lt;/p>
+&lt;p>Now that everything is bound to the pipeline descriptor, we can finally build the pipeline:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>HRESULT hr &lt;span style="color:#f92672">=&lt;/span> m_pRTDevice&lt;span style="color:#f92672">-&amp;gt;&lt;/span>CreateStateObject(raytracingPipeline, IID_PPV_ARGS(&lt;span style="color:#f92672">&amp;amp;&lt;/span>m_RaytracingPSO));
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Check hr for errors
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This can fail, so make sure you check the HRESULT for errors!&lt;/p>
+&lt;h1 id="binding-data">Binding data&lt;/h1>
+&lt;p>Binding data to the global root signature is pretty easy; right before calling &lt;code>DispatchRays()&lt;/code>, all you have to do is bind the root signature, and then bind all the global root signature parameters:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Bind the root signature.
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>commandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetComputeRootSignature(m_GlobalRTRootSignature);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Bind the global root parameters
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>commandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetComputeRootDescriptorTable(&lt;span style="color:#ae81ff">0&lt;/span>, m_RTOutputUAV);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>commandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetComputeRootShaderResourceView(&lt;span style="color:#ae81ff">1&lt;/span>, m_TLAS&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetGPUVirtualAddress());
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// etc...
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Passing data to a local root signature is a bit more difficult, because you have to bind the data to a shader table, which can hold any arbitrary data. You are expected to set the memory directly, but it&amp;rsquo;s not too difficult with some pointer offset tricks.&lt;/p>
+&lt;p>My shader table looks like this:&lt;/p>
+&lt;table>
+&lt;thead>
+&lt;tr>
+&lt;th>Shader record name&lt;/th>
+&lt;th>Size&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td>hit group identifier&lt;/td>
+&lt;td>D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES (defined as 32)&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>material textures&lt;/td>
+&lt;td>sizeof(D3D12_GPU_DESCRIPTOR_HANDLE)&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td>mesh id&lt;/td>
+&lt;td>sizeof(UINT32)&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;p>Now that we know what our entries are and how big they are, we can calculate the offset of a shader record by just adding all the sizes of the previous shader records together.&lt;/p>
+&lt;p>Important to note is the first shader record: the &lt;code>hit group identifier&lt;/code>. It is a mandatory field, and DXR expects us to set it, so that DXR knows to which hit group this shader stage belongs to.&lt;/p>
+&lt;h1 id="invoking-the-raytracing">Invoking the raytracing&lt;/h1>
+&lt;p>To render everything correctly, we first have to make sure to bind our output buffer as our render target:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Transition the output buffer to a UAV
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>gfxContext.TransitionResource(m_RaytracingOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>gfxContext.FlushResourceBarriers(); &lt;span style="color:#75715e">// Wait until m_RaytracingOutput has finished transitioning
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>gfxContext.SetRenderTarget(m_RaytracingOutput.GetRTV());
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>As you can see, we also need to transition the output buffer to be a UAV, so that we can properly access it and write to it from the shaders.&lt;/p>
+&lt;p>Next up we bind the descriptor heap:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>ID3D12DescriptorHeap&lt;span style="color:#f92672">*&lt;/span> pDescriptorHeaps[] &lt;span style="color:#f92672">=&lt;/span> { &lt;span style="color:#f92672">&amp;amp;&lt;/span>m_pRTDescHeap&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetDescriptorHeap() };
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>rtCommandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetDescriptorHeaps(ARRAYSIZE(pDescriptorHeaps), pDescriptorHeaps);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>After that, we bind the global root signature and its parameters&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>commandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetComputeRootSignature(m_RTGlobalRootSig.GetSignature());
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Bind the root parameters by using the SetComputeRoot* functions
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// on the command list, e.g.:
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>commandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetComputeRootDescriptorTable(&lt;span style="color:#ae81ff">0&lt;/span>, m_RTOutputUAV);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>commandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetComputeRootShaderResourceView(&lt;span style="color:#ae81ff">1&lt;/span>, m_TLAS&lt;span style="color:#f92672">-&amp;gt;&lt;/span>GetGPUVirtualAddress());
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// etc...
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Then we can bind our raytracing pipeline:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>rtCommandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>SetPipelineState1(m_RaytracingPSO.Get());
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now that we have everything we need, we can finally tell DXR to kick off the raytracing. In order to do this, we have to fill in the &lt;code>D3D12_DISPATCH_RAYS_DESC&lt;/code> struct, which will hold our shader tables and thread grid dimensions (similar to compute shaders).&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>D3D12_DISPATCH_RAYS_DESC dispatchRaysDesc &lt;span style="color:#f92672">=&lt;/span> {};
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Ray generation shader record
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>dispatchRaysDesc.RayGenerationShaderRecord.StartAddress &lt;span style="color:#f92672">=&lt;/span> m_RayGenShaderTable.GetGpuVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.RayGenerationShaderRecord.SizeInBytes &lt;span style="color:#f92672">=&lt;/span> m_RayGenShaderTable.GetBufferSize();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Hit group table
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>dispatchRaysDesc.HitGroupTable.StartAddress &lt;span style="color:#f92672">=&lt;/span> m_HitShaderTable.GetGpuVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.HitGroupTable.SizeInBytes &lt;span style="color:#f92672">=&lt;/span> m_HitShaderTable.GetBufferSize();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.HitGroupTable.StrideInBytes &lt;span style="color:#f92672">=&lt;/span> m_HitGroupStride;
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Miss table
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>dispatchRaysDesc.MissShaderTable.StartAddress &lt;span style="color:#f92672">=&lt;/span> m_MissShaderTable.GetGpuVirtualAddress();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.MissShaderTable.SizeInBytes &lt;span style="color:#f92672">=&lt;/span> m_MissShaderTable.GetBufferSize();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.MissShaderTable.StrideInBytes &lt;span style="color:#f92672">=&lt;/span> dispatchRaysDesc.MissShaderTable.SizeInBytes; &lt;span style="color:#75715e">// Only one entry
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// The dimensions to dispatch the rays over
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>dispatchRaysDesc.Width &lt;span style="color:#f92672">=&lt;/span> m_RaytracingOutput.GetWidth();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.Height &lt;span style="color:#f92672">=&lt;/span> m_RaytracingOutput.GetHeight();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>dispatchRaysDesc.Depth &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">1&lt;/span>;
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>Once we have that filled in, we can finally call &lt;code>DispatchRays&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>rtCommandList&lt;span style="color:#f92672">-&amp;gt;&lt;/span>DispatchRays(&lt;span style="color:#f92672">&amp;amp;&lt;/span>dispatchRaysDesc);
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>When we&amp;rsquo;re done with raytracing, we can now use our raytracing output buffer however we like. In my example, I simply copied it to MiniEngine&amp;rsquo;s &amp;ldquo;backbuffer&amp;rdquo;:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-cpp" data-lang="cpp">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Make sure the resources are in the correct state
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>gfxContext.TransitionResource(m_RaytracingOutput, D3D12_RESOURCE_STATE_COPY_SOURCE);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Wait for them to finish transitioning
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>gfxContext.FlushResourceBarriers();
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Issue the copy command
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>gfxContext.CopyBuffer(g_SceneColorBuffer, m_RaytracingOutput);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// Transition the back buffer back to a render target
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">&lt;/span>gfxContext.TransitionResource(g_SceneColorBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// We transition m_RaytracingOutput at the beginning of the raytracing pass,
+&lt;/span>&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e">// so no need to transition it here *again*.
+&lt;/span>&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h1 id="conclusion">Conclusion&lt;/h1>
+&lt;p>And that&amp;rsquo;s it! If everything went well, you should now have your scene being raytraced.
+In case you got stuck on something, I recommend going through the references linked below. They were the major ones I used when setting up DXR for the first time.
+I also point you to &lt;a href="https://github.com/SeppahBaws/DirectX-Raytracing">my own repository&lt;/a> where you can find all the source code I wrote during my internship. Everything in there should be working fine(tm).&lt;/p>
+&lt;p>If you haven&amp;rsquo;t yet, I also recommend giving [my previous post](https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/ a read, where I ramble about raytracing in games and stuff. If this post was a bit too much over your head, I think you&amp;rsquo;ll enjoy that one. :)&lt;/p>
+&lt;h1 id="references">References&lt;/h1>
+&lt;p>These are my most-used documentation pages and tutorials that I used while getting my feet wet with DXR.
+I highly recommend going through these, because they contain a ton of information.&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html">DirectX Raytracing (DXR) Functional Spec&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#descriptor-heaps">DirectX-Specs&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://developer.nvidia.com/rtx/raytracing/dxr/dx12-raytracing-tutorial-part-1#accelerationstructure">DX12 Raytracing tutorial - Part 1&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://www.3dgep.com/learning-directx-12-1/#Create_a_Descriptor_Heap">Learning DirectX 12&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device5">ID3D12Device5 - Win32 apps&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.microsoft.com/en-us/windows/win32/direct3d12/root-signatures-overview">Root Signatures Overview - Win32 apps&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.microsoft.com/en-us/windows/win32/direct3d12/direct3d-12-raytracing-hlsl-shaders">Direct3D 12 Raytracing HLSL Shaders - Win32 apps&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_build_raytracing_acceleration_structure_desc">D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC (d3d12.h) - Win32 apps&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_raytracing_geometry_desc">D3D12_RAYTRACING_GEOMETRY_DESC (d3d12.h) - Win32 apps&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.microsoft.com/en-us/windows/win32/direct3d12/descriptor-heaps-overview">Descriptor Heaps Overview - Win32 apps&lt;/a>&lt;/li>
+&lt;/ul></content></item><item><title>Ramblings on Games Rendering and Real-Time Raytracing</title><link>https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/</link><pubDate>Tue, 18 Jan 2022 21:34:09 +0100</pubDate><guid>https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/</guid><description>a.k.a. what I&amp;rsquo;ve learned about how games render their worlds and how raytracing works.
 So first off, raytracing is pretty neat. We have been rendering movies with it for ages now, and it&amp;rsquo;s awesome that we can finally do the same in real-time by utilizing the GPU.
 Why is this awesome?
 Well, it allows us to simulate some effects much more accurately. You might not have noticed this before in games - especially if you&amp;rsquo;re just an average gamer and don&amp;rsquo;t push your face against the monitor to inspect those pixels - but some effects can break down very easily under certain situations, or if you rotate the camera in a specific direction.</description><content>&lt;p>a.k.a. what I&amp;rsquo;ve learned about how games render their worlds and how raytracing works.&lt;/p>
