@@ -19,6 +19,10 @@ copyright = "© 2022 - Seppe Dekeyser"
   creator = "SeppahBaws"
   site = "SeppahBaws"
 
+[markup.tableOfContents]
+  endLevel = 6
+  startLevel = 1
+
 [params.logo]
   logoText = "Rendering Pixels"
 
