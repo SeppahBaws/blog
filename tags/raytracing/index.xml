@@ -535,7 +535,7 @@ The DirectX 12 helpers library (available at: &lt;a href="https://github.com/mic
 &lt;p>And that&amp;rsquo;s it! If everything went well, you should now have your scene being raytraced.
 In case you got stuck on something, I recommend going through the references linked below. They were the major ones I used when setting up DXR for the first time.
 I also point you to &lt;a href="https://github.com/SeppahBaws/DirectX-Raytracing">my own repository&lt;/a> where you can find all the source code I wrote during my internship. Everything in there should be working fine(tm).&lt;/p>
-&lt;p>If you haven&amp;rsquo;t yet, I also recommend giving [my previous post](https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/ a read, where I ramble about raytracing in games and stuff. If this post was a bit too much over your head, I think you&amp;rsquo;ll enjoy that one. :)&lt;/p>
+&lt;p>If you haven&amp;rsquo;t yet, I also recommend giving &lt;a href="https://renderingpixels.com/2022/01/ramblings-on-games-rendering-and-real-time-raytracing/">my previous post&lt;/a> a read, where I ramble about raytracing in games and stuff. If this post was a bit too much over your head, I think you&amp;rsquo;ll enjoy that one. :)&lt;/p>
 &lt;h1 id="references">References&lt;/h1>
 &lt;p>These are my most-used documentation pages and tutorials that I used while getting my feet wet with DXR.
 I highly recommend going through these, because they contain a ton of information.&lt;/p>
